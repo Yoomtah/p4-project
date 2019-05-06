@@ -13,7 +13,6 @@ const bit<8>  TYPE_TCP  = 6;
 typedef bit<9>  egressSpec_t;
 typedef bit<48> macAddr_t;
 typedef bit<32> ip4Addr_t;
-register<bit<1>>(65535) ports_seen;
 
 header ethernet_t {
     macAddr_t dstAddr;
@@ -118,6 +117,7 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
+    register<bit<1>>(65535) ports_seen;
     action drop() {
         mark_to_drop();
     }
@@ -145,7 +145,16 @@ control MyIngress(inout headers hdr,
     apply {
         if (hdr.ipv4.isValid()) {
             if(hdr.tcp.isValid()) {
-                port_in_array = ports_seen.read(
+            bit<1> current_port_seen_before;
+            bit<32> dest_port_cast = (bit<32>)hdr.tcp.dstPort;
+                ports_seen.read(current_port_seen_before, dest_port_cast);
+                if (current_port_seen_before == 1) {
+                	drop(); 
+                	return;
+                }
+                else{
+                	ports_seen.write(dest_port_cast , 1);
+                }
                 ipv4_lpm.apply();
             }
         }
