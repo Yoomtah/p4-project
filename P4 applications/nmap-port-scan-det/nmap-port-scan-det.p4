@@ -117,7 +117,11 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
+    // Store a boolean for all possible ports in registers
     register<bit<1>>(65535) ports_seen;
+    // Alert bit
+    register<bit<1>>(1) alert;
+    //Current va
     action drop() {
         mark_to_drop();
     }
@@ -145,15 +149,37 @@ control MyIngress(inout headers hdr,
     apply {
         if (hdr.ipv4.isValid()) {
             if(hdr.tcp.isValid()) {
-            bit<1> current_port_seen_before;
-            bit<32> dest_port_cast = (bit<32>)hdr.tcp.dstPort;
-                ports_seen.read(current_port_seen_before, dest_port_cast);
-                if (current_port_seen_before == 1) {
-                	drop(); 
-                	return;
-                }
-                else{
-                	ports_seen.write(dest_port_cast , 1);
+            	// Variable to read register values into
+            	bit<1> current_port_seen_before;
+            	// Cast the 16 bit tcp dstPort header to 32 bits so it can be used as the register array index
+            	bit<32> dest_port_cast = (bit<32>)hdr.tcp.dstPort;
+            	// Read the boolean value from the register of the corresponding port number
+            	ports_seen.read(current_port_seen_before, dest_port_cast);
+	           	if (current_port_seen_before == 0) {
+                	// We have not seen this destination port before, record a 1 in corresponding register number
+	           		ports_seen.write(dest_port_cast, 1);
+	           		// Check if we've seen dest port - 1
+                	dest_port_cast = dest_port_cast - 1;
+                	ports_seen.read(current_port_seen_before, dest_port_cast);
+	            	if (current_port_seen_before == 1) {
+	            		//We have seen this port before, check if we've seen dest port - 2
+	            		dest_port_cast = dest_port_cast - 1;
+	            		ports_seen.read(current_port_seen_before, dest_port_cast);
+	            		if (current_port_seen_before == 1) {
+	            			//We have seen this port before, check if we've seen dest port - 3
+	            			dest_port_cast = dest_port_cast - 1;
+	            			ports_seen.read(current_port_seen_before, dest_port_cast);
+	            			if (current_port_seen_before == 1) {
+	            				//We have seen this port before, check if we've seen dest port - 4
+	            				dest_port_cast = dest_port_cast - 1;
+	            				ports_seen.read(current_port_seen_before, dest_port_cast);
+	            				if (current_port_seen_before == 1) {
+	            					//We have seen this port before 5 consecutive ports have been hit, set alert.
+	            					alert.write(0, 1);
+	            				}
+	            			}
+	            		}
+	            	}
                 }
                 ipv4_lpm.apply();
             }

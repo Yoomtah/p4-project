@@ -2,6 +2,8 @@
   "target": "bmv2",
   "p4info": "build/nmap-port-scan-det.p4info",
   "bmv2_json": "build/nmap-port-scan-det.json",
+  "switch_cli": "simple_switch_CLI",
+  "cli": true,
   "table_entries": [
     {
       "table": "MyIngress.ipv4_lpm",
