@@ -14,8 +14,9 @@
 #
 
 from mininet.net import Mininet
-from mininet.node import Switch, Host
+from mininet.node import Switch, CPULimitedHost
 from mininet.log import setLogLevel, info, error, debug
+from mininet.util import custom
 from mininet.moduledeps import pathCheck
 from sys import exit
 from time import sleep
@@ -23,9 +24,9 @@ import os
 import tempfile
 import socket
 
-class P4Host(Host):
+class P4Host(CPULimitedHost):
     def config(self, **params):
-        r = super(P4Host, self).config(**params)
+        r = super(CPULimitedHost, self).config(**params)
 
         for off in ["rx", "tx", "sg"]:
             cmd = "/sbin/ethtool --offload %s %s off" % (self.defaultIntf().name, off)

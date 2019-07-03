@@ -26,7 +26,7 @@ from p4_mininet import P4Switch, P4Host
 
 from mininet.net import Mininet
 from mininet.topo import Topo
-from mininet.node import CPULimitedHost
+from mininet.node import CPULimitedHost, Host
 from mininet.link import TCLink
 from mininet.cli import CLI
 from mininet.term import makeTerm
@@ -103,11 +103,6 @@ class ExerciseTopo(Topo):
             host_mac = '00:00:00:00:%02x:%02x' % (sw_num, host_num)
             # Each host IP should be /24, so all exercise traffic will use the
             # default gateway (the switch) without sending ARP requests.
-            # GIVE H2 MASSIVELY LIMITED RESOURCES
-            # if (host_name == "h2"):
-            # 	self.addHost(host_name, ip=host_ip+'/24', mac=host_mac, cpu=(0.05/len(host_links)))
-            # else:
-            # 	self.addHost(host_name, ip=host_ip+'/24', mac=host_mac, cpu=(0.5/len(host_links)))
             self.addHost(host_name, ip=host_ip+'/24', mac=host_mac)
             self.addLink(host_name, host_sw,delay=link['latency'], bw=link['bandwidth'], addr1=host_mac, addr2=host_mac)
             self.addSwitchPort(host_sw, host_name)
@@ -219,7 +214,7 @@ class ExerciseRunner:
 
         #self.do_net_cli()
         print("HI I'M RUNNING")
-        #print(self.net.runCpuLimitTest( cpu=0.5/3 ))
+        #print(self.net.runCpuLimitTest( cpu=0.3 ))
         child = pexpect.spawn('simple_switch_CLI --thrift-port 9090')
         child.expect('Obtaining JSON from switch...')
         child.expect('Done')
@@ -227,85 +222,34 @@ class ExerciseRunner:
         print(child.readline())
         #print(child)
         h1 = self.net.get('h1')
-        h1.sendCmd('hping3 10.0.2.2 --count 30 --fast', printPid=True)
         ratio_list = []
         rate_list = []
-        timer = 0;
-        while(timer < 5):
-	        child.sendline('register_read flow_into_my_host 0')
-	        child.readline()
-	        flow_in = float(child.readline().split('=')[1].strip())
-	      	child.sendline('register_read flow_out_to_other_host 0')
-	        child.readline()
-	        flow_out = float(child.readline().split('=')[1].strip())
-	        ratio_list.append(flow_in / flow_out)
-	        rate_list.append(10.0)
-	        timer += 1
-	        sleep(1)
-        h1.sendInt()
-        h1.waitOutput()
-        h1.monitor()
-        print("huey")
-        h1.sendCmd('hping3 10.0.2.2 -i u1000')
-        while(timer < 30):
-	        child.sendline('register_read flow_into_my_host 0')
-	        child.readline()
-	        flow_in = float(child.readline().split('=')[1].strip())
-	      	child.sendline('register_read flow_out_to_other_host 0')
-	        child.readline()
-	        flow_out = float(child.readline().split('=')[1].strip())
-	        ratio_list.append(flow_in / flow_out)
-	        rate_list.append(100.0)
-	        timer += 1
-        	sleep(1)
-    	h1.sendInt()
-    	h1.waitOutput()
-    	h1.monitor()
-    	print("lewis")
-    	h1.sendCmd('hping3 10.0.2.2 -i u100')
-    	while(timer < 60):
-	        child.sendline('register_read flow_into_my_host 0')
-	        child.readline()
-	        flow_in = float(child.readline().split('=')[1].strip())
-	      	child.sendline('register_read flow_out_to_other_host 0')
-	        child.readline()
-	        flow_out = float(child.readline().split('=')[1].strip())
-	        ratio_list.append(flow_in / flow_out)
-	        rate_list.append(1000.0)
-	        timer += 1
-	        sleep(1)
-        h1.sendInt()
-        h1.waitOutput()
-        h1.monitor()
-        print("and")
-    	h1.sendCmd('hping3 10.0.2.2 -i u10')
-    	while(timer < 90):
-	        child.sendline('register_read flow_into_my_host 0')
-	        child.readline()
-	        flow_in = float(child.readline().split('=')[1].strip())
-	      	child.sendline('register_read flow_out_to_other_host 0')
-	        child.readline()
-	        flow_out = float(child.readline().split('=')[1].strip())
-	        ratio_list.append(flow_in / flow_out)
-	        rate_list.append(10000.0)
-	        timer += 1
-	        sleep(1)
-    	h1.sendInt()
-    	h1.waitOutput()
-    	h1.monitor()
-    	print("the")
-    	h1.sendCmd('hping3 10.0.2.2 -i u1')
-    	while(timer < 120):
-	        child.sendline('register_read flow_into_my_host 0')
-	        child.readline()
-	        flow_in = float(child.readline().split('=')[1].strip())
-	      	child.sendline('register_read flow_out_to_other_host 0')
-	        child.readline()
-	        flow_out = float(child.readline().split('=')[1].strip())
-	        ratio_list.append(flow_in / flow_out)
-	        rate_list.append(100000.0)
-	        timer += 1
-	        sleep(1)
+        # u_var starts at 10000, ends at 1, that's 10^4 to 10^0
+        # rate starts at 100, ends at 1000000, thats 10^2 to 10^6
+        for i in reversed(range(5)):
+        	print('----LOOP: ' + str(i))
+        	timer=0
+        	u_var = 10**(i)
+        	rate = 10.0**(6-i)
+        	cmd_string = 'hping3 10.0.2.2 -i u' + str(u_var)
+        	print(cmd_string)
+        	h1.sendCmd(cmd_string, printPid=True)
+        	while(timer < 30):
+		        child.sendline('register_read flow_into_my_host 0')
+		        child.readline()
+		        flow_in = float(child.readline().split('=')[1].strip())
+		      	child.sendline('register_read flow_out_to_other_host 0')
+		        child.readline()
+		        flow_out = float(child.readline().split('=')[1].strip())
+		        ratio_list.append(flow_in / flow_out)
+		        rate_list.append(rate)
+		        timer += 1
+		        print(timer)
+		        sleep(1)
+			h1.sendInt()
+	        h1.waitOutput()
+	        h1.monitor()
+
     	# h1.sendCmd('hping3 10.0.2.2 --flood')
     	# while(timer < 150):
     	# 	child.sendline('register_read flow_into_my_host 0')
@@ -323,11 +267,11 @@ class ExerciseRunner:
         h1.waitOutput()
     	h1.monitor()
         # stop right after the CLI is exited
-    	print("news")
+    	print("Loop over")
     	plt.scatter(ratio_list, rate_list, c=(0,0,0), alpha=0.5)
     	plt.title('Scatter plot pythonspot.com')
     	plt.xlabel('Flow ratio (into my host / out to other host')
-    	plt.xlim(0, 2)
+    	plt.xscale('log')
     	plt.ylabel('Packets per second')
     	plt.yscale('log')
     	plt.show()
@@ -384,7 +328,11 @@ class ExerciseRunner:
                       link = TCLink,
                       host = P4Host,
                       switch = switchClass)
+        for host in self.net.hosts:
+        	print host.__dict__
                       #controller = None)
+
+
 
     def program_switch_p4runtime(self, sw_name, sw_dict):
         """ This method will use P4Runtime to program the switch using the
