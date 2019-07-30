@@ -66,9 +66,9 @@ class P4Host(CPULimitedHost):
         host_name = str(name)
                 # GIVE H2 MASSIVELY LIMITED RESOURCES
         if (host_name == "h1"):
-            cpu=1
+            cpu=0.7
         else:
-            cpu=1
+            cpu=0.05
         CPULimitedHost.__init__(self, host_name, cpu=cpu)
         # Host.__init__( self, name, **kwargs )
         # # Initialize class if necessary

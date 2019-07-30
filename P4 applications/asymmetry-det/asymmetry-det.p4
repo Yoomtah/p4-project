@@ -4,7 +4,24 @@
 
 const bit<16> TYPE_IPV4 = 0x800;
 const bit<8>  TYPE_TCP  = 6;
+register<bit<32>>(1) qreg;
+register<bit<32>>(1) rreg;
 
+// void doshifting(in bit<8> index, in bit<32> numerator, in bit<32> denominator) {
+//     bit<32> quotient = 0;
+//     bit<32> remainder = 0;
+//     qreg.read(quotient, 0);
+//     rreg.read(remainder, 0);
+//     remainder = remainder << 1; //left shift remainder by 1 bit
+//     remainder[0] = numerator[index]; //Set the least-significant bit of remainder equal to bit index of the numerator
+//     if (remainder >= denominator) {
+//         remainder = remainder - denominator;
+//         quotient[index] = 1;
+//     }
+//     qreg.write(0, quotient);
+//     rreg.write(0, remainder);
+//     return;
+// }
 
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
@@ -117,6 +134,10 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
+
+
+
+
     
     bit<48> time_threshold = 1000000;
     //1 second in microseconds
@@ -125,6 +146,7 @@ control MyIngress(inout headers hdr,
     //Count the number of packets in the ingress/egress combo
     register<bit<32>>(1) flow_into_my_host;
     register<bit<32>>(1) flow_out_to_other_host;
+    register<bit<32>>(1) flow_ratio;
     //Counts always need to be at least 1
     bit<32> count_packets_in = 1;
     bit<32> count_packets_out = 1;
@@ -182,6 +204,13 @@ control MyIngress(inout headers hdr,
                 }
                 if (standard_metadata.ingress_global_timestamp - start_time >= time_threshold) {
                         //A second or more has passed
+                        //Do division
+                        // if (count_packets_out != 0) {
+                        //     //There are no loops in P4 so I need to write a function to do some bit shifting and subtracting 32 times
+                        //     doshifting(index, count_packets_in, count_packets_out)
+                        //     flow_ratio.write(0, quotient);
+
+                        // }
                         //Reset everything
                         count_packets_in = 1;
                         flow_into_my_host.write(0, count_packets_in);
