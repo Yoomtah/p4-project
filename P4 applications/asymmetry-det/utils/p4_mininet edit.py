@@ -14,9 +14,14 @@
 #
 
 from mininet.net import Mininet
-from mininet.node import Switch, Host
+from mininet.node import Switch, CPULimitedHost, Host
 from mininet.log import setLogLevel, info, error, debug
 from mininet.moduledeps import pathCheck
+
+
+import mininet.util as util
+from subprocess import Popen, PIPE
+
 from sys import exit
 import os
 import tempfile
@@ -27,9 +32,12 @@ from netstat import check_listening_on_port
 
 SWITCH_START_TIMEOUT = 10 # seconds
 
-class P4Host(Host):
+class P4Host(CPULimitedHost):
+
+    inited = False
+
     def config(self, **params):
-        r = super(Host, self).config(**params)
+        r = super(CPULimitedHost, self).config(**params)
 
         self.defaultIntf().rename("eth0")
 
@@ -53,6 +61,58 @@ class P4Host(Host):
             self.defaultIntf().MAC()
         )
         print "**********"
+
+    def __init__( self, name, sched='cfs', **kwargs ):
+        host_name = str(name)
+                # GIVE H2 MASSIVELY LIMITED RESOURCES
+        if (host_name == "h1"):
+            cpu=0.9
+        else:
+            cpu=0.001
+        CPULimitedHost.__init__(self, host_name, cpu=cpu)
+        # Host.__init__( self, name, **kwargs )
+        # # Initialize class if necessary
+        # if not P4Host.inited:
+        #     P4Host.init()
+        # # Create a cgroup and move shell into it
+        # self.cgroup = str('cpu,cpuacct,cpuset:/' + self.name)
+        # print(type(self.cgroup))
+        # util.errFail( 'cgcreate -g ' + self.cgroup )
+
+    # @classmethod
+    # def errRun( *cmd, **kwargs ):
+    #     stderr = kwargs.get( 'stderr', PIPE )
+    #     shell = kwargs.get( 'shell', False )
+    #     echo = kwargs.get( 'echo', False )
+    #     if echo:
+    #         # cmd goes to stderr, output goes to stdout
+    #         info( cmd, '\n' )
+    #     if len( cmd ) == 1:
+    #         cmd = cmd[ 0 ]
+    #     # Allow passing in a list or a string
+    #     if isinstance( cmd, str ) and not shell:
+    #         cmd = cmd.split( ' ' )
+    #         cmd = [ str( arg ) for arg in cmd ]
+    #     elif isinstance( cmd, list ) and shell:
+    #         cmd = " ".join( arg for arg in cmd )
+    #     debug( '*** errRun:', cmd, '\n' )
+    #     popen = Popen( cmd, stdout=PIPE, stderr=stderr, shell=shell )
+    #     out, err = '', ''
+
+    # @classmethod
+    # def errFail( *cmd, **kwargs ):
+    #     "Run a command using errRun and raise exception on nonzero exit"
+    #     out, err, ret = P4Host.errRun( *cmd, **kwargs )
+    #     if ret:
+    #         raise Exception( "errFail: %s failed with return code %s: %s"
+    #                          % ( cmd, ret, err ) )
+    #     return out, err, ret
+
+    @classmethod
+    def init( cls ):
+        "Initialization for CPULimitedHost class"
+        util.mountCgroups()
+        cls.inited = True
 
 class P4Switch(Switch):
     """P4 virtual switch"""
