@@ -109,7 +109,6 @@ control MyIngress(inout headers hdr,
     bit<32> count_packets_out = 1;
     //Record the time we start each counter
     register<bit<48>>(1) counter_start_time;
-    register<bit<48>>(1) ingress_timestamp;
     //In microseconds
     //Current va
     action drop() {
@@ -142,7 +141,6 @@ control MyIngress(inout headers hdr,
         if (hdr.ipv4.isValid()) {
             bit<48> start_time = 0;
             counter_start_time.read(start_time, 0);
-            ingress_timestamp.write(0, standard_metadata.ingress_global_timestamp);
             flow_into_my_host.read(count_packets_in, 0);
             flow_out_to_other_host.read(count_packets_out, 0);
             if (start_time == 0) {

@@ -220,38 +220,43 @@ class ExerciseRunner:
         child.expect('Control utility for runtime P4 table manipulation')
         print(child.readline())
         h1 = self.net.get('h1')
-        ratio_list = [] 
+        ratio_list = []
+        python_ratio_list = [] 
+        flow_out_list = []
         rate_list = []
         
-        for i in reversed(range(5)):
+        for i in range(4, -2, -1):
             print('----LOOP: ' + str(i))
             timer=0
-            u_var = 10**(i) # u_var starts at 10000, ends at 1, that's 10^4 to 10^0
-            rate = 10.0**(6-i) # rate starts at 100, ends at 1000000, thats 10^2 to 10^6
-            cmd_string = 'hping3 10.0.2.2 -i u' + str(u_var)
+            if i == -1:
+                cmd_string = 'hping3 10.0.2.2 --flood' # send packets as fast as possible
+                rate = 10.0**7
+            else:
+                u_var = 10**(i) # u_var starts at 10000, ends at 1, that's 10^4 to 10^0
+                rate = 10.0**(6-i) # rate starts at 100, ends at 1000000, thats 10^2 to 10^6
+                cmd_string = 'hping3 10.0.2.2 -i u' + str(u_var)
             print(cmd_string)
             h1.sendCmd(cmd_string, printPid=True)
             while(timer < 30):
                 child.sendline('register_read flow_out_to_other_host 0')
                 child.readline()
-                print('out ' + child.readline().split('=')[1].strip())
+                flow_out = float(child.readline().split('=')[1].strip())
                 child.sendline('register_read flow_into_my_host 0')
                 child.readline()
-                print('in ' + child.readline().split('=')[1].strip())
+                flow_in = float(child.readline().split('=')[1].strip())
                 child.sendline('register_read time_diff 0')
                 child.readline()
                 print('time diff ' + child.readline().split('=')[1].strip())
                 child.sendline('register_read counter_start_time 0')
                 child.readline()
                 print('counter_start_time ' + child.readline().split('=')[1].strip())
-                child.sendline('register_read ingress_timestamp 0')
-                child.readline()
-                print('ingress_timestamp ' + child.readline().split('=')[1].strip())
                 child.sendline('register_read flow_ratio 0')
                 child.readline()
                 ratio = float(child.readline().split('=')[1].strip())
                 ratio_list.append(ratio)
                 print('Ratio: ' + str(ratio))
+                python_ratio_list.append(flow_out / flow_in)
+                flow_out_list.append(flow_out)
                 rate_list.append(rate)
                 timer += 1
                 print(timer)
@@ -269,13 +274,31 @@ class ExerciseRunner:
         h1.waitOutput()
         h1.monitor()
         print("Loop over") # stop right after the CLI is exited
+        plt.figure(1)
         plt.scatter(ratio_list, rate_list, c=(0,0,0), alpha=0.5)
-        plt.title('Scatter plot pythonspot.com')
+        plt.title('In-P4-calculated flow ratios')
         plt.xlabel('Flow ratio (sent / replies')
         plt.xscale('log')
         plt.ylabel('Packets per second')
         plt.yscale('log')
         plt.show()
+        plt.figure(2)
+        plt.scatter(python_ratio_list, rate_list, c=(0,0,0), alpha=0.5)
+        plt.title('In-python-calculated flow ratios')
+        plt.xlabel('Flow ratio (sent / replies')
+        plt.xscale('log')
+        plt.ylabel('Packets per second')
+        plt.yscale('log')
+        plt.show()
+        plt.figure(3)
+        plt.scatter(flow_out_list, rate_list, c=(0,0,0), alpha=0.5)
+        plt.title('Packets recorded by switch vs hping3 rate')
+        plt.xlabel('Count_packets_out register')
+        plt.xscale('linear')
+        plt.ylabel('Packets per second')
+        plt.yscale('log')
+        plt.show()
+
         self.net.stop()
         exit()
 
