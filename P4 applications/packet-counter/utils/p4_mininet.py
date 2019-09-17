@@ -33,13 +33,11 @@ from netstat import check_listening_on_port
 SWITCH_START_TIMEOUT = 10 # seconds
 
 class P4Host(CPULimitedHost):
-
-    inited = False
-
     def config(self, **params):
         r = super(CPULimitedHost, self).config(**params)
 
         self.defaultIntf().rename("eth0")
+        #self.setParam( r, 'setCPUFrac', cpu=params['cpu'] )
 
         for off in ["rx", "tx", "sg"]:
             cmd = "/sbin/ethtool --offload eth0 %s off" % off
@@ -49,6 +47,7 @@ class P4Host(CPULimitedHost):
         self.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
         self.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
         self.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
+
 
         return r
 
@@ -62,14 +61,16 @@ class P4Host(CPULimitedHost):
         )
         print "**********"
 
-    def __init__( self, name, ip, mac, sched='cfs', **kwargs ):
-        host_name = str(name)
-                # GIVE H2 MASSIVELY LIMITED RESOURCES
-        if (host_name == "h1"):
-            cpu=0
-        else:
-            cpu=0
-        CPULimitedHost.__init__(self, host_name, ip=ip, mac=mac, cpu=cpu)
+    # def __init__( self, name, ip, mac, sched='cfs', **kwargs ):
+    #     host_name = str(name)
+    #             # GIVE H2 MASSIVELY LIMITED RESOURCES
+    #     if (host_name == "h1"):
+    #         cpu=0.99997
+    #     else:
+    #         cpu=0.00001
+    #     CPULimitedHost.__init__(self, host_name, ip=ip, mac=mac, cpu=cpu)
+
+
         # Host.__init__( self, name, **kwargs )
         # # Initialize class if necessary
         # if not P4Host.inited:
