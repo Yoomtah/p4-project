@@ -104,7 +104,10 @@ class ExerciseTopo(Topo):
             host_mac = '00:00:00:00:%02x:%02x' % (sw_num, host_num)
             # Each host IP should be /24, so all exercise traffic will use the
             # default gateway (the switch) without sending ARP requests.
-            self.addHost(str(host_name), ip=host_ip+'/24', mac=host_mac, cpu=0.00000000000000000000000000000001)
+            if str(host_name) == "h2":
+                self.addHost(str(host_name), ip=host_ip+'/24', mac=host_mac, cpu=-1)
+            else:
+                self.addHost(str(host_name), ip=host_ip+'/24', mac=host_mac, cpu=-1)
             self.addLink(host_name, host_sw,delay=link['latency'], bw=link['bandwidth'], addr1=host_mac, addr2=host_mac)
             self.addSwitchPort(host_sw, host_name)
 
@@ -213,7 +216,7 @@ class ExerciseRunner:
         # wait for that to finish. Not sure how to do this better
         sleep(1)
 
-        #self.do_net_cli()
+        self.do_net_cli()
         print("HI I'M RUNNING")
         print(self.net.get("s1").thrift_port)
         print(self.net.get("s2").thrift_port)
