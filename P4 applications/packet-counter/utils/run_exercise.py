@@ -38,6 +38,18 @@ import numpy as np
 from p4runtime_switch import P4RuntimeSwitch
 import p4runtime_lib.simple_controller
 
+def piecewise_out(x):
+    if x <= 30:
+        return 2000*x
+    elif x > 30:
+        return (1100*x) + 27000
+
+def piecewise_in(x):
+    if x <= 30:
+        return 1000*x
+    elif x > 30:
+        return (100*x) + 27000
+
 def configureP4Switch(**switch_args):
     """ Helper class that is called by mininet to initialize
         the virtual P4 switches. The purpose is to ensure each
@@ -230,12 +242,31 @@ class ExerciseRunner:
         child.expect('Control utility for runtime P4 table manipulation')
         print(child.readline())
         h1 = self.net.get('h1')
+        h3 = self.net.get('h3')
         python_ratio_list = [] 
         flow_out_list = []
         flow_in_list = []
         timer = 0
 
         h1.sendCmd('hping3 10.0.2.2 -i u1000', printPid=True)
+        h3.sendCmd('hping3 10.0.1.1 -i u1000', printPid=True)
+        while(timer < 3):
+            child.sendline('register_read flow_out_to_other_host 0')
+            child.readline()
+            flow_out = float(child.readline().split('=')[1].strip())
+            child.sendline('register_read flow_into_my_host 0')
+            child.readline()
+            flow_in = float(child.readline().split('=')[1].strip())
+            print('Flow out: ' + str(flow_out))
+            print('Flow in: ' + str(flow_in))
+            flow_out_list.append(flow_out)
+            flow_in_list.append(flow_in)
+            timer += 1
+            print(timer)
+            sleep(10)
+        h3.sendInt()
+        h3.waitOutput()
+        h3.sendCmd('hping3 10.0.1.1 -i u10000', printPid=True)
         while(timer < 6):
             child.sendline('register_read flow_out_to_other_host 0')
             child.readline()
@@ -250,11 +281,13 @@ class ExerciseRunner:
             timer += 1
             print(timer)
             sleep(10)
-
         child.terminate(force=True)
         h1.sendInt()
+        h3.sendInt()
         print("Loop over") # stop right after the CLI is exited
         x = np.linspace(0, 60, 1000)
+        vec_piecewise_out = np.vectorize(piecewise_out)
+        vec_piecewise_in = np.vectorize(piecewise_in)
         plt.figure(1)
         plt.scatter(range(0, 60, 10), flow_out_list, c=(0,0,0), alpha=0.5, label='Count_packets_out register values')
         plt.title('Flow out packets recorded by switch over time')
@@ -262,9 +295,9 @@ class ExerciseRunner:
         plt.ylabel('Count_packets_out register value')
         plt.xscale('linear')
         plt.yscale('linear')
-        coeffs_out = np.polyfit(range(0, 60, 10), flow_out_list, 1)
-        plt.plot(x, coeffs_out[1] + (coeffs_out[0] * x), color='red', label='Best fit to results equation y=' + str(coeffs_out[1]) + ' + (' + str(coeffs_out[0]) + ' * x)')
-        plt.plot(x, 1000*x, color='blue', label='Expected equation y=1000x')
+        coeffs_out = np.polyfit(range(0, 60, 10), flow_out_list, 2)
+        plt.plot(x, coeffs_out[2] + (coeffs_out[1] * x) + (coeffs_out[0] * x**2), color='red', label='Best fit to results equation y=' + str(coeffs_out[2]) + ' + (' + str(coeffs_out[1]) + ' * x)' + ' + (' + str(coeffs_out[0]) + ' * x^2)')
+        plt.plot(x, vec_piecewise_out(x), color='blue', label='Expected equation y=2000x | x<=30; y=1100x | x>30')
         plt.legend()
         plt.show()
         plt.figure(2)
@@ -274,9 +307,9 @@ class ExerciseRunner:
         plt.ylabel('Count_packets_in register value')
         plt.xscale('linear')
         plt.yscale('linear')
-        coeffs_in = np.polyfit(range(0, 60, 10), flow_in_list, 1)
-        plt.plot(x, coeffs_in[1] + (coeffs_in[0] * x), color='red', label='Best fit to results equation y=' + str(coeffs_in[1]) + ' + (' + str(coeffs_in[0]) + ' * x)')
-        plt.plot(x, 1000*x, color='blue', label='Expected equation y=1000x')
+        coeffs_in = np.polyfit(range(0, 60, 10), flow_in_list, 2)
+        plt.plot(x, coeffs_in[2] + (coeffs_in[1] * x) + (coeffs_in[0] * x**2), color='red', label='Best fit to results equation y=' + str(coeffs_in[2]) + ' + (' + str(coeffs_in[1]) + ' * x)' + ' + (' + str(coeffs_in[0]) + ' * x^2)')
+        plt.plot(x, vec_piecewise_in(x), color='blue', label='Expected equation y=1000x | x<=30; y=100x | x>30')
         plt.legend()
         plt.show()
 

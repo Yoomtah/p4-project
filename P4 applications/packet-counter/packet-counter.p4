@@ -129,7 +129,7 @@ control MyIngress(inout headers hdr,
         if (hdr.ipv4.isValid()) {
             flow_into_my_host.read(count_packets_in, 0);
             flow_out_to_other_host.read(count_packets_out, 0);
-        	if (standard_metadata.ingress_port == 2) {
+        	if (standard_metadata.ingress_port == 3) {
                 //Packet has come off the link between the switches
                 count_packets_in = count_packets_in + 1;
                 flow_into_my_host.write(0, count_packets_in);
