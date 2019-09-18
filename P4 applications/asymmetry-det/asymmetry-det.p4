@@ -95,8 +95,8 @@ control MyIngress(inout headers hdr,
 
 
     
-    bit<48> time_threshold = 10000000000000;
-    //1 second in microseconds
+    bit<48> time_threshold = 2000000;
+    //1 second in microseconds is 1000000
     //The simple topology has 18 possible ingress egress combos (not all will be used)
     //I only care about h1 and h2 and they both use 1 to go to host and 2 to send out
     //Count the number of packets in the ingress/egress combo
@@ -150,12 +150,12 @@ control MyIngress(inout headers hdr,
                 flow_into_my_host.write(0, 1);
                 flow_out_to_other_host.write(0, 1);
             }
-        	if (hdr.ipv4.dstAddr == 0x0a000101) {
+        	if (standard_metadata.ingress_port == 3) {
                 //Packet has come off the link between the switches
                 count_packets_in = count_packets_in + 1;
                 flow_into_my_host.write(0, count_packets_in);
             }
-            if (hdr.ipv4.dstAddr == 0x0a000102) {
+            if (standard_metadata.ingress_port == 1) {
                 //Packet has come from the host on that switch
                 count_packets_out = count_packets_out + 1;
                 flow_out_to_other_host.write(0, count_packets_out);

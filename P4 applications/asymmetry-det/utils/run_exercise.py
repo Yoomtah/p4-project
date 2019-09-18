@@ -26,8 +26,13 @@ from p4_mininet import P4Switch, P4Host
 
 from mininet.net import Mininet
 from mininet.topo import Topo
+from mininet.node import CPULimitedHost, Host
 from mininet.link import TCLink
 from mininet.cli import CLI
+from mininet.term import makeTerm
+
+import pexpect
+import matplotlib.pyplot as plt
 
 from p4runtime_switch import P4RuntimeSwitch
 import p4runtime_lib.simple_controller
@@ -99,9 +104,7 @@ class ExerciseTopo(Topo):
             # Each host IP should be /24, so all exercise traffic will use the
             # default gateway (the switch) without sending ARP requests.
             self.addHost(host_name, ip=host_ip+'/24', mac=host_mac)
-            self.addLink(host_name, host_sw,
-                         delay=link['latency'], bw=link['bandwidth'],
-                         addr1=host_mac, addr2=host_mac)
+            self.addLink(host_name, host_sw,delay=link['latency'], bw=link['bandwidth'], addr1=host_mac, addr2=host_mac)
             self.addSwitchPort(host_sw, host_name)
 
         for link in switch_links:
@@ -209,9 +212,102 @@ class ExerciseRunner:
         # wait for that to finish. Not sure how to do this better
         sleep(1)
 
-        self.do_net_cli()
-        # stop right after the CLI is exited
+        #self.do_net_cli()
+        print("HI I'M RUNNING")
+
+        child = pexpect.spawn('simple_switch_CLI --thrift-port 9090')
+        child.expect('Obtaining JSON from switch...')
+        child.expect('Done')
+        child.expect('Control utility for runtime P4 table manipulation')
+        print(child.readline())
+        h1 = self.net.get('h1')
+        h3 = self.net.get('h3')
+        python_ratio_list = []
+        p4_ratio_list = []
+        flow_out_list = []
+        flow_in_list = []
+        timer = 0
+
+        h1.sendCmd('hping3 10.0.2.2 -i u1000', printPid=True)
+        h3.sendCmd('hping3 10.0.1.1 -i u1000', printPid=True)
+        while(timer < 3):
+            child.sendline('register_read flow_out_to_other_host 0')
+            child.readline()
+            flow_out = float(child.readline().split('=')[1].strip())
+            child.sendline('register_read flow_into_my_host 0')
+            child.readline()
+            flow_in = float(child.readline().split('=')[1].strip())
+            child.sendline('register_read flow_ratio 0')
+            child.readline()
+            p4_flow_ratio = float(child.readline().split('=')[1].strip())
+            print('Flow out: ' + str(flow_out))
+            print('Flow in: ' + str(flow_in))
+            print('P4 Flow Ratio: ' + str(p4_flow_ratio))
+            print('Python Ratio: ' + str(flow_out / flow_in))
+            flow_out_list.append(flow_out)
+            flow_in_list.append(flow_in)
+            p4_ratio_list.append(p4_flow_ratio)
+            python_ratio_list.append(flow_out / flow_in)
+            timer += 1
+            print(timer)
+            sleep(10)
+        h3.sendInt()
+        h3.waitOutput()
+        h3.sendCmd('hping3 10.0.1.1 -i u10000', printPid=True)
+        while(timer < 6):
+            child.sendline('register_read flow_out_to_other_host 0')
+            child.readline()
+            flow_out = float(child.readline().split('=')[1].strip())
+            child.sendline('register_read flow_into_my_host 0')
+            child.readline()
+            flow_in = float(child.readline().split('=')[1].strip())
+            child.sendline('register_read flow_ratio 0')
+            child.readline()
+            p4_flow_ratio = float(child.readline().split('=')[1].strip())
+            print('Flow out: ' + str(flow_out))
+            print('Flow in: ' + str(flow_in))
+            print('P4 Flow Ratio: ' + str(p4_flow_ratio))
+            print('Python Ratio: ' + str(flow_out / flow_in))
+            flow_out_list.append(flow_out)
+            flow_in_list.append(flow_in)
+            p4_ratio_list.append(p4_flow_ratio)
+            python_ratio_list.append(flow_out / flow_in)
+            timer += 1
+            print(timer)
+            sleep(10)
+
+        child.terminate(force=True)
+        h1.sendInt()
+        h3.sendInt()
+        print("Loop over") # stop right after the CLI is exited
+        plt.figure(1)
+        plt.plot(range(0, 60, 10), flow_out_list, '-o', c='red', alpha=0.5, label='Count_packets_out register values')
+        plt.title('Flow out packets recorded by switch over time')
+        plt.xlabel('Time (10 sec incr)')
+        plt.ylabel('Count_packets_out register value')
+        plt.xscale('linear')
+        plt.yscale('linear')
+        plt.legend()
+        plt.show()
+        plt.figure(2)
+        plt.plot(range(0, 60, 10), flow_in_list, '-o', c='blue', alpha=0.5, label='Count_packets_in register values')
+        plt.title('Flow in packets recorded by switch over time')
+        plt.xlabel('Time (10 sec incr)')
+        plt.ylabel('Count_packets_in register value')
+        plt.legend()
+        plt.show()
+        plt.figure(3)
+        plt.plot(range(0, 60, 10), p4_ratio_list, '-o', c='green', alpha=0.5, label='flow_ratio register values')
+        plt.title('Flow ratio recorded by switch and Python calculated ratios over time')
+        plt.xlabel('Time (10 sec incr)')
+        plt.ylabel('Ratio values')
+        plt.plot(range(0, 60, 10), python_ratio_list, '-o', c='orange', alpha=0.8, label='Python calculated Count_packets_out/Count_packets_in values')
+
+        plt.legend()
+        plt.show()
+
         self.net.stop()
+        exit()
 
 
     def parse_links(self, unparsed_links):
@@ -229,7 +325,7 @@ class ExerciseRunner:
             link_dict = {'node1':s,
                         'node2':t,
                         'latency':'0ms',
-                        'bandwidth':None
+                        'bandwidth':1000
                         }
             if len(link) > 2:
                 link_dict['latency'] = self.formatLatency(link[2])
@@ -262,8 +358,13 @@ class ExerciseRunner:
         self.net = Mininet(topo = self.topo,
                       link = TCLink,
                       host = P4Host,
-                      switch = switchClass,
-                      controller = None)
+                      switch = switchClass)
+        for host in self.net.hosts:
+            print host.__dict__
+            #print(host.cfsInfo(host.params['cpu']))
+                      #controller = None)
+
+
 
     def program_switch_p4runtime(self, sw_name, sw_dict):
         """ This method will use P4Runtime to program the switch using the
@@ -326,7 +427,7 @@ class ExerciseRunner:
             sw_iface = link.intf1 if link.intf1 != h_iface else link.intf2
             # phony IP to lie to the host about
             host_id = int(host_name[1:])
-            sw_ip = '10.0.1.254'
+            sw_ip = '10.0.%d.254' % host_id
 
             # Ensure each host's interface name is unique, or else
             # mininet cannot shutdown gracefully

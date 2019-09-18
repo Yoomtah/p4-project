@@ -26,13 +26,8 @@ from p4_mininet import P4Switch, P4Host
 
 from mininet.net import Mininet
 from mininet.topo import Topo
-from mininet.node import CPULimitedHost, Host
 from mininet.link import TCLink
 from mininet.cli import CLI
-from mininet.term import makeTerm
-
-import pexpect
-import matplotlib.pyplot as plt
 
 from p4runtime_switch import P4RuntimeSwitch
 import p4runtime_lib.simple_controller
@@ -104,7 +99,9 @@ class ExerciseTopo(Topo):
             # Each host IP should be /24, so all exercise traffic will use the
             # default gateway (the switch) without sending ARP requests.
             self.addHost(host_name, ip=host_ip+'/24', mac=host_mac)
-            self.addLink(host_name, host_sw,delay=link['latency'], bw=link['bandwidth'], addr1=host_mac, addr2=host_mac)
+            self.addLink(host_name, host_sw,
+                         delay=link['latency'], bw=link['bandwidth'],
+                         addr1=host_mac, addr2=host_mac)
             self.addSwitchPort(host_sw, host_name)
 
         for link in switch_links:
@@ -212,98 +209,9 @@ class ExerciseRunner:
         # wait for that to finish. Not sure how to do this better
         sleep(1)
 
-        #self.do_net_cli()
-        print("HI I'M RUNNING")
-        child = pexpect.spawn('simple_switch_CLI --thrift-port 9090')
-        child.expect('Obtaining JSON from switch...')
-        child.expect('Done')
-        child.expect('Control utility for runtime P4 table manipulation')
-        print(child.readline())
-        h1 = self.net.get('h1')
-        ratio_list = []
-        python_ratio_list = [] 
-        flow_out_list = []
-        rate_list = []
-        
-        for i in range(4, -2, -1):
-            print('----LOOP: ' + str(i))
-            timer=0
-            if i == -1:
-                cmd_string = 'hping3 10.0.2.2 -q --flood' # send packets as fast as possible
-                rate = 10.0**7
-            else:
-                u_var = 10**(i) # u_var starts at 10000, ends at 1, that's 10^4 to 10^0
-                rate = 10.0**(6-i) # rate starts at 100, ends at 1000000, thats 10^2 to 10^6
-                cmd_string = 'hping3 10.0.2.2 -i u' + str(u_var)
-            print(cmd_string)
-            h1.sendCmd(cmd_string, printPid=True)
-            while(timer < 30):
-                child.sendline('register_read flow_out_to_other_host 0')
-                child.readline()
-                flow_out = float(child.readline().split('=')[1].strip())
-                child.sendline('register_read flow_into_my_host 0')
-                child.readline()
-                flow_in = float(child.readline().split('=')[1].strip())
-                child.sendline('register_read time_diff 0')
-                child.readline()
-                print('time diff ' + child.readline().split('=')[1].strip())
-                child.sendline('register_read counter_start_time 0')
-                child.readline()
-                print('counter_start_time ' + child.readline().split('=')[1].strip())
-                child.sendline('register_read flow_ratio 0')
-                child.readline()
-                ratio = float(child.readline().split('=')[1].strip())
-                ratio_list.append(ratio)
-                print('Ratio: ' + str(ratio))
-                print('Flow out: ' + str(flow_out))
-                print('Flow in: ' + str(flow_in))
-                print('Python Ratio: ' + str(flow_out / flow_in))
-                python_ratio_list.append(flow_out / flow_in)
-                flow_out_list.append(flow_out)
-                rate_list.append(rate)
-                timer += 1
-                print(timer)
-                sleep(1)
-            print("Sending int")
-            h1.sendInt()
-            print("Waiting output")
-            h1.waitOutput()
-            print("Montitoring")
-            # h1.monitor()
-            print("Starting another loop")
-
-        child.terminate(force=True)
-        h1.sendInt()
-        h1.waitOutput()
-        h1.monitor()
-        print("Loop over") # stop right after the CLI is exited
-        plt.figure(1)
-        plt.scatter(ratio_list, rate_list, c=(0,0,0), alpha=0.5)
-        plt.title('In-P4-calculated flow ratios')
-        plt.xlabel('Flow ratio (sent / replies')
-        plt.xscale('log')
-        plt.ylabel('Packets per second')
-        plt.yscale('log')
-        plt.show()
-        plt.figure(2)
-        plt.scatter(python_ratio_list, rate_list, c=(0,0,0), alpha=0.5)
-        plt.title('In-python-calculated flow ratios')
-        plt.xlabel('Flow ratio (sent / replies')
-        plt.xscale('log')
-        plt.ylabel('Packets per second')
-        plt.yscale('log')
-        plt.show()
-        plt.figure(3)
-        plt.scatter(flow_out_list, rate_list, c=(0,0,0), alpha=0.5)
-        plt.title('Packets recorded by switch vs hping3 rate')
-        plt.xlabel('Count_packets_out register')
-        plt.xscale('linear')
-        plt.ylabel('Packets per second')
-        plt.yscale('log')
-        plt.show()
-
+        self.do_net_cli()
+        # stop right after the CLI is exited
         self.net.stop()
-        exit()
 
 
     def parse_links(self, unparsed_links):
@@ -321,7 +229,7 @@ class ExerciseRunner:
             link_dict = {'node1':s,
                         'node2':t,
                         'latency':'0ms',
-                        'bandwidth':1000
+                        'bandwidth':None
                         }
             if len(link) > 2:
                 link_dict['latency'] = self.formatLatency(link[2])
@@ -354,13 +262,8 @@ class ExerciseRunner:
         self.net = Mininet(topo = self.topo,
                       link = TCLink,
                       host = P4Host,
-                      switch = switchClass)
-        for host in self.net.hosts:
-            print host.__dict__
-            print(host.cfsInfo(host.params['cpu']))
-                      #controller = None)
-
-
+                      switch = switchClass,
+                      controller = None)
 
     def program_switch_p4runtime(self, sw_name, sw_dict):
         """ This method will use P4Runtime to program the switch using the
@@ -423,7 +326,7 @@ class ExerciseRunner:
             sw_iface = link.intf1 if link.intf1 != h_iface else link.intf2
             # phony IP to lie to the host about
             host_id = int(host_name[1:])
-            sw_ip = '10.0.%d.254' % host_id
+            sw_ip = '10.0.1.254'
 
             # Ensure each host's interface name is unique, or else
             # mininet cannot shutdown gracefully
