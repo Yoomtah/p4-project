@@ -104,9 +104,13 @@ control MyIngress(inout headers hdr,
     register<bit<32>>(1) flow_out_to_other_host;
     register<bit<32>>(1) flow_ratio;
     register<bit<48>>(1) time_diff;
+    register<bit<1>>(1) under_attack;
     //Counts always need to be at least 1
     bit<32> count_packets_in = 1;
     bit<32> count_packets_out = 1;
+    bit<32> ratio_threshold = 2;
+    bit<32> flow_size_threshold = 1000;
+    bit<1> attack_flag = 0;
     //Record the time we start each counter
     register<bit<48>>(1) counter_start_time;
     //In microseconds
@@ -141,8 +145,11 @@ control MyIngress(inout headers hdr,
         if (hdr.ipv4.isValid()) {
             bit<48> start_time = 0;
             counter_start_time.read(start_time, 0);
-            flow_into_my_host.read(count_packets_in, 0);
-            flow_out_to_other_host.read(count_packets_out, 0);
+            under_attack.read(attack_flag, 0);
+            if (attack_flag != 1) {
+                flow_into_my_host.read(count_packets_in, 0);
+                flow_out_to_other_host.read(count_packets_out, 0);
+            }
             if (start_time == 0) {
                 //We must just be starting out
                 counter_start_time.write(0, standard_metadata.ingress_global_timestamp);
@@ -366,6 +373,14 @@ control MyIngress(inout headers hdr,
                 else {
                     flow_ratio.write(0, quotient);
                 }
+                // Check flow ratio
+                if (quotient > ratio_threshold) {
+                    under_attack.write(0, 1);
+                    // Check flow size
+                    // if ( (count_packets_in + count_packets_out) > flow_size_threshold) {
+                    //     under_attack.write(0, 1);
+                    // }
+                }
                 // Reset everything
                 count_packets_in = 1;
                 flow_into_my_host.write(0, count_packets_in);
@@ -374,6 +389,9 @@ control MyIngress(inout headers hdr,
                 counter_start_time.write(0, standard_metadata.ingress_global_timestamp);
             }
             time_diff.write(0, standard_metadata.ingress_global_timestamp - start_time);
+            if (attack_flag == 1) {
+                drop();
+            }
             ipv4_lpm.apply();
         }
     }
