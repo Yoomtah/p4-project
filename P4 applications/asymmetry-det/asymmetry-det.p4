@@ -162,7 +162,7 @@ control MyIngress(inout headers hdr,
                 flow_into_my_host.write(1, 1);
                 flow_out_to_other_host.write(1, 1);
             }
-        	if (standard_metadata.ingress_port == 3) {
+        	if (standard_metadata.ingress_port == 2) {
                 //Packet has come off the link between the switches
                 update_packets_in_storage = update_packets_in_storage + 1;
                 flow_into_my_host.write(1, update_packets_in_storage);
