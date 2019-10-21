@@ -26,11 +26,29 @@ from p4_mininet import P4Switch, P4Host
 
 from mininet.net import Mininet
 from mininet.topo import Topo
+from mininet.node import CPULimitedHost, Host
 from mininet.link import TCLink
 from mininet.cli import CLI
+from mininet.term import makeTerm
+
+import pexpect
+import matplotlib.pyplot as plt
+import numpy as np
 
 from p4runtime_switch import P4RuntimeSwitch
 import p4runtime_lib.simple_controller
+
+def piecewise_out(x):
+    if x <= 30:
+        return 2000*x
+    elif x > 30:
+        return (1100*x) + 27000
+
+def piecewise_in(x):
+    if x <= 30:
+        return 1000*x
+    elif x > 30:
+        return (100*x) + 27000
 
 def configureP4Switch(**switch_args):
     """ Helper class that is called by mininet to initialize
@@ -98,11 +116,11 @@ class ExerciseTopo(Topo):
             host_mac = '00:00:00:00:%02x:%02x' % (sw_num, host_num)
             # Each host IP should be /24, so all exercise traffic will use the
             # default gateway (the switch) without sending ARP requests.
-            self.addHost(host_name, ip=host_ip+'/24', mac=host_mac)
-            if (host_name == "h2"):
-                self.addLink(host_name, host_sw, delay=link['latency'], bw=0.05,addr1=host_mac, addr2=host_mac)
+            if str(host_name) == "h2":
+                self.addHost(str(host_name), ip=host_ip+'/24', mac=host_mac, cpu=-1)
             else:
-                self.addLink(host_name, host_sw, delay=link['latency'], bw=link['bandwidth'],addr1=host_mac, addr2=host_mac)
+                self.addHost(str(host_name), ip=host_ip+'/24', mac=host_mac, cpu=-1)
+            self.addLink(host_name, host_sw,delay=link['latency'], bw=link['bandwidth'], addr1=host_mac, addr2=host_mac)
             self.addSwitchPort(host_sw, host_name)
 
         for link in switch_links:
@@ -210,145 +228,93 @@ class ExerciseRunner:
         # wait for that to finish. Not sure how to do this better
         sleep(1)
 
-        # self.do_net_cli()
-
+        self.do_net_cli()
+        print("HI I'M RUNNING")
+        print(self.net.get("s1").thrift_port)
+        print(self.net.get("s2").thrift_port)
+        print(self.net.get("s3").thrift_port)
+        #self.net.configHosts()
+        #self.net.runCpuLimitTest( cpu=self.net.get("h1").params['cpu'] )
+        #self.net.runCpuLimitTest( cpu=self.net.get("h2").params['cpu'] )
+        child = pexpect.spawn('simple_switch_CLI --thrift-port 9090')
+        child.expect('Obtaining JSON from switch...')
+        child.expect('Done')
+        child.expect('Control utility for runtime P4 table manipulation')
+        print(child.readline())
         h1 = self.net.get('h1')
-        # p4_ratio_list = []
-        # attack_flag_list = []
-        loss_percentage_list = []
-        average_rtt_list = []
+        h3 = self.net.get('h3')
+        python_ratio_list = [] 
+        flow_out_list = []
+        flow_in_list = []
         timer = 0
 
-        h1.sendCmd('hping3 10.0.2.2 -i u10000 --quiet', printPid=True)
-        while(timer < 18):
+        h1.sendCmd('hping3 10.0.2.2 -i u1000', printPid=True)
+        h3.sendCmd('hping3 10.0.1.1 -i u1000', printPid=True)
+        while(timer < 3):
+            child.sendline('register_read flow_out_to_other_host 0')
+            child.readline()
+            flow_out = float(child.readline().split('=')[1].strip())
+            child.sendline('register_read flow_into_my_host 0')
+            child.readline()
+            flow_in = float(child.readline().split('=')[1].strip())
+            print('Flow out: ' + str(flow_out))
+            print('Flow in: ' + str(flow_in))
+            flow_out_list.append(flow_out)
+            flow_in_list.append(flow_in)
             timer += 1
             print(timer)
-            if timer == 3:
-                h1.sendInt()
-                hping_output = h1.waitOutput()
-                loss_percentage = int(re.search('\d*\%', hping_output).group().replace('%', ''))
-                average_rtt = float(re.search('\/\d*.\d*\/', hping_output).group().replace('/', ''))
-                # child.sendline('register_read flow_ratio 0')
-                # child.readline()
-                # p4_flow_ratio = float(child.readline().split('=')[1].strip())
-                # child.sendline('register_read under_attack 0')
-                # child.readline()
-                # attack_flag = float(child.readline().split('=')[1].strip())
-                # print('P4 Flow Ratio: ' + str(p4_flow_ratio))
-                # print('Attack flag: ' + str(attack_flag))
-                print('Loss %: ' + str(loss_percentage))
-                print('Average RTT: ' + str(average_rtt))
-                # p4_ratio_list.append(p4_flow_ratio)
-                # attack_flag_list.append(attack_flag)
-                loss_percentage_list.append(loss_percentage)
-                average_rtt_list.append(average_rtt)
-                h1.sendCmd('hping3 10.0.2.2 -i u8000', printPid=True)
-            elif timer == 6:
-                h1.sendInt()
-                hping_output = h1.waitOutput()
-                loss_percentage = int(re.search('\d*\%', hping_output).group().replace('%', ''))
-                average_rtt = float(re.search('\/\d*.\d*\/', hping_output).group().replace('/', ''))
-                # child.sendline('register_read flow_ratio 0')
-                # child.readline()
-                # p4_flow_ratio = float(child.readline().split('=')[1].strip())
-                # child.sendline('register_read under_attack 0')
-                # child.readline()
-                # attack_flag = float(child.readline().split('=')[1].strip())
-                # print('P4 Flow Ratio: ' + str(p4_flow_ratio))
-                # print('Attack flag: ' + str(attack_flag))
-                print('Loss %: ' + str(loss_percentage))
-                print('Average RTT: ' + str(average_rtt))
-                # p4_ratio_list.append(p4_flow_ratio)
-                # attack_flag_list.append(attack_flag)
-                loss_percentage_list.append(loss_percentage)
-                average_rtt_list.append(average_rtt)
-                h1.sendCmd('hping3 10.0.2.2 -i u6000', printPid=True)
-            elif timer == 9:
-                h1.sendInt()
-                hping_output = h1.waitOutput()
-                loss_percentage = int(re.search('\d*\%', hping_output).group().replace('%', ''))
-                average_rtt = float(re.search('\/\d*.\d*\/', hping_output).group().replace('/', ''))
-                # child.sendline('register_read flow_ratio 0')
-                # child.readline()
-                # p4_flow_ratio = float(child.readline().split('=')[1].strip())
-                # child.sendline('register_read under_attack 0')
-                # child.readline()
-                # attack_flag = float(child.readline().split('=')[1].strip())
-                # print('P4 Flow Ratio: ' + str(p4_flow_ratio))
-                # print('Attack flag: ' + str(attack_flag))
-                print('Loss %: ' + str(loss_percentage))
-                print('Average RTT: ' + str(average_rtt))
-                # p4_ratio_list.append(p4_flow_ratio)
-                # attack_flag_list.append(attack_flag)
-                loss_percentage_list.append(loss_percentage)
-                average_rtt_list.append(average_rtt)
-                h1.sendCmd('hping3 10.0.2.2 -i u4000', printPid=True)
-            elif timer == 12:
-                h1.sendInt()
-                hping_output = h1.waitOutput()
-                loss_percentage = int(re.search('\d*\%', hping_output).group().replace('%', ''))
-                average_rtt = float(re.search('\/\d*.\d*\/', hping_output).group().replace('/', ''))
-                # child.sendline('register_read flow_ratio 0')
-                # child.readline()
-                # p4_flow_ratio = float(child.readline().split('=')[1].strip())
-                # child.sendline('register_read under_attack 0')
-                # child.readline()
-                # attack_flag = float(child.readline().split('=')[1].strip())
-                # print('P4 Flow Ratio: ' + str(p4_flow_ratio))
-                # print('Attack flag: ' + str(attack_flag))
-                print('Loss %: ' + str(loss_percentage))
-                print('Average RTT: ' + str(average_rtt))
-                # p4_ratio_list.append(p4_flow_ratio)
-                # attack_flag_list.append(attack_flag)
-                loss_percentage_list.append(loss_percentage)
-                average_rtt_list.append(average_rtt)
-                h1.sendCmd('hping3 10.0.2.2 -i u2000', printPid=True)
-            elif timer == 15:
-                h1.sendInt()
-                hping_output = h1.waitOutput()
-                loss_percentage = int(re.search('\d*\%', hping_output).group().replace('%', ''))
-                average_rtt = float(re.search('\/\d*.\d*\/', hping_output).group().replace('/', ''))
-                # child.sendline('register_read flow_ratio 0')
-                # child.readline()
-                # p4_flow_ratio = float(child.readline().split('=')[1].strip())
-                # child.sendline('register_read under_attack 0')
-                # child.readline()
-                # attack_flag = float(child.readline().split('=')[1].strip())
-                # print('P4 Flow Ratio: ' + str(p4_flow_ratio))
-                # print('Attack flag: ' + str(attack_flag))
-                print('Loss %: ' + str(loss_percentage))
-                print('Average RTT: ' + str(average_rtt))
-                # p4_ratio_list.append(p4_flow_ratio)
-                # attack_flag_list.append(attack_flag)
-                loss_percentage_list.append(loss_percentage)
-                average_rtt_list.append(average_rtt)
-                h1.sendCmd('hping3 10.0.2.2 -i u1000', printPid=True)
-            elif timer == 18:
-                h1.sendInt()
-                hping_output = h1.waitOutput()
-                loss_percentage = int(re.search('\d*\%', hping_output).group().replace('%', ''))
-                average_rtt = float(re.search('\/\d*.\d*\/', hping_output).group().replace('/', ''))
-                # child.sendline('register_read flow_ratio 0')
-                # child.readline()
-                # p4_flow_ratio = float(child.readline().split('=')[1].strip())
-                # child.sendline('register_read under_attack 0')
-                # child.readline()
-                # attack_flag = float(child.readline().split('=')[1].strip())
-                # print('P4 Flow Ratio: ' + str(p4_flow_ratio))
-                # print('Attack flag: ' + str(attack_flag))
-                print('Loss %: ' + str(loss_percentage))
-                print('Average RTT: ' + str(average_rtt))
-                # p4_ratio_list.append(p4_flow_ratio)
-                # attack_flag_list.append(attack_flag)
-                loss_percentage_list.append(loss_percentage)
-                average_rtt_list.append(average_rtt)
             sleep(10)
-
-        # child.terminate(force=True)
+        h3.sendInt()
+        h3.waitOutput()
+        h3.sendCmd('hping3 10.0.1.1 -i u10000', printPid=True)
+        while(timer < 6):
+            child.sendline('register_read flow_out_to_other_host 0')
+            child.readline()
+            flow_out = float(child.readline().split('=')[1].strip())
+            child.sendline('register_read flow_into_my_host 0')
+            child.readline()
+            flow_in = float(child.readline().split('=')[1].strip())
+            print('Flow out: ' + str(flow_out))
+            print('Flow in: ' + str(flow_in))
+            flow_out_list.append(flow_out)
+            flow_in_list.append(flow_in)
+            timer += 1
+            print(timer)
+            sleep(10)
+        child.terminate(force=True)
         h1.sendInt()
-        print("Loop over")
-        # stop right after the CLI is exited
+        h3.sendInt()
+        print("Loop over") # stop right after the CLI is exited
+        x = np.linspace(0, 60, 1000)
+        vec_piecewise_out = np.vectorize(piecewise_out)
+        vec_piecewise_in = np.vectorize(piecewise_in)
+        plt.figure(1)
+        plt.scatter(range(0, 60, 10), flow_out_list, c=(0,0,0), alpha=0.5, label='Count_packets_out register values')
+        plt.title('Flow out packets recorded by switch over time')
+        plt.xlabel('Time (10 sec incr)')
+        plt.ylabel('Count_packets_out register value')
+        plt.xscale('linear')
+        plt.yscale('linear')
+        coeffs_out = np.polyfit(range(0, 60, 10), flow_out_list, 2)
+        plt.plot(x, coeffs_out[2] + (coeffs_out[1] * x) + (coeffs_out[0] * x**2), color='red', label='Best fit to results equation y=' + str(coeffs_out[2]) + ' + (' + str(coeffs_out[1]) + ' * x)' + ' + (' + str(coeffs_out[0]) + ' * x^2)')
+        plt.plot(x, vec_piecewise_out(x), color='blue', label='Expected equation y=2000x | x<=30; y=1100x | x>30')
+        plt.legend()
+        plt.show()
+        plt.figure(2)
+        plt.scatter(range(0, 60, 10), flow_in_list, c=(0,0,0), alpha=0.5, label='Count_packets_in register values')
+        plt.title('Flow in packets recorded by switch over time')
+        plt.xlabel('Time (10 sec incr)')
+        plt.ylabel('Count_packets_in register value')
+        plt.xscale('linear')
+        plt.yscale('linear')
+        coeffs_in = np.polyfit(range(0, 60, 10), flow_in_list, 2)
+        plt.plot(x, coeffs_in[2] + (coeffs_in[1] * x) + (coeffs_in[0] * x**2), color='red', label='Best fit to results equation y=' + str(coeffs_in[2]) + ' + (' + str(coeffs_in[1]) + ' * x)' + ' + (' + str(coeffs_in[0]) + ' * x^2)')
+        plt.plot(x, vec_piecewise_in(x), color='blue', label='Expected equation y=1000x | x<=30; y=100x | x>30')
+        plt.legend()
+        plt.show()
+
         self.net.stop()
+        exit()
 
 
     def parse_links(self, unparsed_links):
@@ -366,7 +332,7 @@ class ExerciseRunner:
             link_dict = {'node1':s,
                         'node2':t,
                         'latency':'0ms',
-                        'bandwidth':None
+                        'bandwidth':1000
                         }
             if len(link) > 2:
                 link_dict['latency'] = self.formatLatency(link[2])
@@ -399,8 +365,15 @@ class ExerciseRunner:
         self.net = Mininet(topo = self.topo,
                       link = TCLink,
                       host = P4Host,
-                      switch = switchClass,
-                      controller = None)
+                      switch = switchClass)
+        for host in self.net.hosts:
+            if host.name == "h2":
+                host.setCPUFrac(0.00000000000000000000000000000001, 'cfs')
+            print host.__dict__
+            #print(host.cfsInfo(host.params['cpu']))
+                      #controller = None)
+
+
 
     def program_switch_p4runtime(self, sw_name, sw_dict):
         """ This method will use P4Runtime to program the switch using the
