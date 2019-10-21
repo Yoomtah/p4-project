@@ -48,15 +48,16 @@ def get_data(h1, child, p4_ratio_list, attack_flag_list, loss_percentage_list, a
     child.sendline('register_read under_attack 0')
     child.readline()
     attack_flag = float(child.readline().split('=')[1].strip())
+    print('Offered load (bytes/sec): ' + str((1000000 / int(cmd_string)) * 64))
     print('P4 Flow Ratio: ' + str(p4_flow_ratio))
     print('Attack flag: ' + str(attack_flag))
     print('Loss %: ' + str(loss_percentage))
-    print('Average RTT: ' + str(average_rtt))
+    print('Average RTT (ms): ' + str(average_rtt))
     p4_ratio_list.append(p4_flow_ratio)
     attack_flag_list.append(attack_flag)
     loss_percentage_list.append(loss_percentage)
     average_rtt_list.append(average_rtt)
-    h1.sendCmd(cmd_string, printPid=True)
+    h1.sendCmd('hping3 10.0.2.2 -i u' + cmd_string + ' --quiet', printPid=True)
     return p4_ratio_list, attack_flag_list, loss_percentage_list, average_rtt_list
 
 
@@ -247,7 +248,7 @@ class ExerciseRunner:
         child.expect('Control utility for runtime P4 table manipulation')
         print(child.readline())
         h1 = self.net.get('h1')
-        load_level_list = list(range(10000, 1900, -500))
+        load_level_list = list(range(8000, 0, -500))
         p4_ratio_list = []
         attack_flag_list = []
         loss_percentage_list = []
@@ -259,7 +260,7 @@ class ExerciseRunner:
             sleep(10)
             print(timer)
             print('hping3 10.0.2.2 -i u'+str(load_level_list[timer]))
-            p4_ratio_list, attack_flag_list, loss_percentage_list, average_rtt_list = get_data(h1, child, p4_ratio_list, attack_flag_list, loss_percentage_list, average_rtt_list, 'hping3 10.0.2.2 -i u'+str(load_level_list[timer]) + ' --quiet')
+            p4_ratio_list, attack_flag_list, loss_percentage_list, average_rtt_list = get_data(h1, child, p4_ratio_list, attack_flag_list, loss_percentage_list, average_rtt_list, str(load_level_list[timer]))
             timer += 1                          
 
         child.terminate(force=True)
